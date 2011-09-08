@@ -388,7 +388,7 @@ class Chunk(object):
 
         try:
             x, y, z = coords
-            return self.blocks[x, z, y]
+            return self.blocks[(x * 16 + z) * 16 + y]
         except IndexError:
             # Coordinates were out-of-bounds; warn and pretend it's air.
             warn("Coordinates %s are out-of-bounds in %s" % (coords, self),
