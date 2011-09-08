@@ -1,8 +1,6 @@
+from array import array
 from itertools import product
 from warnings import warn
-
-from numpy import cast, logical_not, logical_and, transpose, where, zeros, amax
-from numpy import vectorize
 
 from twisted.internet.defer import maybeDeferred
 
@@ -17,16 +15,19 @@ class ChunkWarning(Warning):
     lethal, so the chunk is issuing a warning instead of an exception.
     """
 
+def clamp(x, low, high):
+    return min(max(x, low), high)
+
 # Set up glow tables.
 # These tables provide glow maps for illuminated points.
 glow = [None] * 16
 for i in range(16):
     dim = 2 * i + 1
-    glow[i] = zeros((dim, dim, dim), dtype="int8")
+    glow[i] = array("b", [0] * (dim**3))
     for x, y, z in product(xrange(dim), repeat=3):
         distance = abs(x - i) + abs(y - i) + abs(z - i)
-        glow[i][ x,  y,  z] = i + 1 - distance
-    glow[i] = cast["uint8"](glow[i].clip(0, 15))
+        glow[i][((x * dim + y) * dim) + z] = i + 1 - distance
+    glow[i] = array("B", [clamp(x, 0, 15) for x in glow[i]])
 
 def composite_glow(target, strength, x, y, z):
     """
@@ -106,16 +107,16 @@ class Chunk(object):
         self.x = int(x)
         self.z = int(z)
 
-        self.blocks = zeros((16, 16, 128), dtype="uint8")
-        self.heightmap = zeros((16, 16), dtype="uint8")
-        self.blocklight = zeros((16, 16, 128), dtype="uint8")
-        self.metadata = zeros((16, 16, 128), dtype="uint8")
-        self.skylight = zeros((16, 16, 128), dtype="uint8")
+        self.blocks = array("B", [0] * (16 * 16 * 128))
+        self.heightmap = array("B", [0] * (16 * 16))
+        self.blocklight = array("B", [0] * (16 * 16 * 128))
+        self.metadata = array("B", [0] * (16 * 16 * 128))
+        self.skylight = array("B", [0] * (16 * 16 * 128))
 
         self.entities = set()
         self.tiles = {}
 
-        self.damaged = zeros((16, 16, 128), dtype="bool")
+        self.damaged = array("B", [0] * (16 * 16 * 128))
 
         self.all_damaged = False
 
@@ -134,13 +135,13 @@ class Chunk(object):
 
         for x, z in product(xrange(16), repeat=2):
             for y in range(127, -1, -1):
-                if self.blocks[x, z, y]:
+                if self.blocks[(x * 16 + z) * 16 + y]:
                     break
 
-            self.heightmap[x, z] = y
+            self.heightmap[x * 16 + z] = y
 
     def regenerate_blocklight(self):
-        lightmap = zeros((16, 16, 128), dtype="uint32")
+        lightmap = array("L", [0] * (16 * 16 * 128))
 
         for x, y, z in product(xrange(16), xrange(128), xrange(16)):
             block = self.blocks[x, z, y]
