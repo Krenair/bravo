@@ -26,7 +26,7 @@ for i in range(16):
     glow[i] = array("b", [0] * (dim**3))
     for x, y, z in product(xrange(dim), repeat=3):
         distance = abs(x - i) + abs(y - i) + abs(z - i)
-        glow[i][((x * dim + y) * dim) + z] = i + 1 - distance
+        glow[i][(x * dim + y) * dim + z] = i + 1 - distance
     glow[i] = array("B", [clamp(x, 0, 15) for x in glow[i]])
 
 def composite_glow(target, strength, x, y, z):
@@ -266,14 +266,14 @@ class Chunk(object):
         Record damage on this chunk.
         """
 
-        x, y, z = coords
-
         if self.all_damaged:
             return
 
-        self.damaged[x, z, y] = True
+        x, y, z = coords
 
-        if self.damaged.sum() > 176:
+        self.damaged[(x * 16 + z) * 16 + y] = 1
+
+        if sum(self.damaged) > 176:
             self.all_damaged = True
 
     def is_damaged(self):
@@ -284,7 +284,7 @@ class Chunk(object):
         :returns: True if any damage is pending on this chunk, False if not.
         """
 
-        return self.all_damaged or self.damaged.any()
+        return self.all_damaged or any(self.damaged)
 
     def get_damage_packet(self):
         """
@@ -314,28 +314,43 @@ class Chunk(object):
         if self.all_damaged:
             # Resend the entire chunk!
             return self.save_to_packet()
-        elif not self.damaged.any():
+        elif not any(self.damaged):
+            # Send nothing at all; we don't even have a scratch on us.
             return ""
-        elif self.damaged.sum() == 1:
-            # Use a single block update packet.
-            x, z, y = [int(i) for i in zip(*self.damaged.nonzero())[0]]
+        elif sum(self.damaged) == 1:
+            # Use a single block update packet. Find the first (only) set bit
+            # in the damaged array, and use it as an index.
+            index = next(i for i, value in enumerate(self.damaged) if value)
+            # divmod() trick for coords.
+            index, y = divmod(index, 128)
+            x, z = divmod(index, 16)
+
             return make_packet("block",
                     x=x + self.x * 16,
                     y=y,
                     z=z + self.z * 16,
-                    type=int(self.blocks[x, z, y]),
-                    meta=int(self.metadata[x, z, y]))
+                    type=self.blocks[index],
+                    meta=self.metadata[index])
         else:
             # Use a batch update.
-            damaged = self.damaged.nonzero()
             # Coordinates are not quite packed in the same system as the
             # indices for chunk data structures.
             # Chunk data structures are ((x * 16) + z) * 128) + y, or in
             # bit-twiddler's parlance, x << 11 | z << 7 | y. However, for
             # this, we need x << 12 | z << 8 | y, so repack accordingly.
-            coords = [int(x << 12 | z << 8 | y) for x, z, y in zip(*damaged)]
-            types = [int(i) for i in self.blocks[damaged]]
-            metadata = [int(i) for i in self.metadata[damaged]]
+            coords = []
+            types = []
+            metadata = []
+            for index, value in self.damaged:
+                if value:
+                    # This line deserves an explanation. The top of index is
+                    # correct, but needs to be repacked. x and z are 4 bits
+                    # wide, and need to be one bit higher, so we mask them
+                    # together and shift them both up, while preserving the y.
+                    repacked = ((index & 0x7f80) << 1) | (index & 0x7f)
+                    coords.append(repacked)
+                    types.append(self.blocks[index])
+                    metadata.append(self.metadata[index])
 
             return make_packet("batch", x=self.x, z=self.z,
                 length=len(coords), coords=coords, types=types,
@@ -346,7 +361,7 @@ class Chunk(object):
         Clear this chunk's damage.
         """
 
-        self.damaged.fill(False)
+        self.damaged = array("B", [0] * (16 * 16 * 128))
         self.all_damaged = False
 
     def save_to_packet(self):
