@@ -1,8 +1,7 @@
 from twisted.trial import unittest
+from bravo.tests.helpers import assert_array_equal
+from array import array
 import warnings
-
-from numpy import empty
-from numpy.testing import assert_array_equal
 
 import bravo.chunk
 
@@ -143,8 +142,7 @@ class TestLightmaps(unittest.TestCase):
         # lightmap are set to 15 (fully illuminated).
         # Note that skylight of a solid block is 0, the important value
         # is the skylight of the transluscent (usually air) block above it.
-        reference = empty((16, 16))
-        reference.fill(15)
+        reference = array("B", [0xf] * (16 * 16))
 
         assert_array_equal(self.c.skylight[:, :, 1], reference)
 
@@ -156,8 +154,7 @@ class TestLightmaps(unittest.TestCase):
         self.c.regenerate()
 
         # Put a gradient on the reference lightmap.
-        reference = empty((16, 16))
-        reference.fill(15)
+        reference = array("B", [0xf] * (16 * 16))
         top = 1
         bottom = 15
         glow = 14
