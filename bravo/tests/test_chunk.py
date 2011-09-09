@@ -14,9 +14,9 @@ class TestChunkBlocks(unittest.TestCase):
         pass
 
     def test_set_block(self):
-        self.assertEqual(self.c.blocks[0, 0, 0], 0)
+        self.assertEqual(self.c.blocks[0], 0)
         self.c.set_block((0, 0, 0), 1)
-        self.assertEqual(self.c.blocks[0, 0, 0], 1)
+        self.assertEqual(self.c.blocks[0], 1)
 
     def test_set_block_xyz_xzy(self):
         """
@@ -26,9 +26,9 @@ class TestChunkBlocks(unittest.TestCase):
         self.c.set_block((1, 0, 0), 1)
         self.c.set_block((0, 1, 0), 2)
         self.c.set_block((0, 0, 1), 3)
-        self.assertEqual(self.c.blocks[1, 0, 0], 1)
-        self.assertEqual(self.c.blocks[0, 1, 0], 3)
-        self.assertEqual(self.c.blocks[0, 0, 1], 2)
+        self.assertEqual(self.c.blocks[256], 1)
+        self.assertEqual(self.c.blocks[1], 3)
+        self.assertEqual(self.c.blocks[16], 2)
 
     def test_destroy(self):
         """
@@ -38,8 +38,8 @@ class TestChunkBlocks(unittest.TestCase):
         self.c.set_block((0, 0, 0), 1)
         self.c.set_metadata((0, 0, 0), 1)
         self.c.destroy((0, 0, 0))
-        self.assertEqual(self.c.blocks[0, 0, 0], 0)
-        self.assertEqual(self.c.metadata[0, 0, 0], 0)
+        self.assertEqual(self.c.blocks[0], 0)
+        self.assertEqual(self.c.metadata[0], 0)
 
     def test_sed(self):
         """
@@ -71,21 +71,21 @@ class TestChunkBlocks(unittest.TestCase):
 
         self.c.populated = True
 
-        self.assertEqual(self.c.heightmap[0, 0], 0)
+        self.assertEqual(self.c.heightmap[0], 0)
         self.c.set_block((0, 20, 0), 1)
-        self.assertEqual(self.c.heightmap[0, 0], 20)
+        self.assertEqual(self.c.heightmap[0], 20)
 
         self.c.set_block((0, 10, 0), 1)
-        self.assertEqual(self.c.heightmap[0, 0], 20)
+        self.assertEqual(self.c.heightmap[0], 20)
 
         self.c.set_block((0, 30, 0), 1)
-        self.assertEqual(self.c.heightmap[0, 0], 30)
+        self.assertEqual(self.c.heightmap[0], 30)
 
         self.c.destroy((0, 10, 0))
-        self.assertEqual(self.c.heightmap[0, 0], 30)
+        self.assertEqual(self.c.heightmap[0], 30)
 
         self.c.destroy((0, 30, 0))
-        self.assertEqual(self.c.heightmap[0, 0], 20)
+        self.assertEqual(self.c.heightmap[0], 20)
 
 class TestNumpyQuirks(unittest.TestCase):
     """
