@@ -144,11 +144,11 @@ class Chunk(object):
         lightmap = array("L", [0] * (16 * 16 * 128))
 
         for x, y, z in product(xrange(16), xrange(128), xrange(16)):
-            block = self.blocks[x, z, y]
+            block = self.blocks[(x * 16 + z) * 16 + y]
             if block in glowing_blocks:
                 composite_glow(lightmap, glowing_blocks[block], x, y, z)
 
-        self.blocklight = cast["uint8"](lightmap.clip(0, 15))
+        self.blocklight = array("B", [clamp(x, 0, 15) for x in lightmap])
 
     def regenerate_metadata(self):
         pass
@@ -163,7 +163,7 @@ class Chunk(object):
         The height map must be valid for this method to produce valid results.
         """
 
-        lightmap = zeros((16, 16, 128), dtype="uint8")
+        lightmap = array("L", [0] * (16 * 16 * 128))
 
         for x, z in product(xrange(16), repeat=2):
             # The maximum lighting value, unsurprisingly, is 0xf, which is the
@@ -172,7 +172,7 @@ class Chunk(object):
 
             # Apparently, skylights start at the block *above* the block on
             # which the light is incident?
-            height = self.heightmap[x, z] + 1
+            height = self.heightmap[x * 16 + z] + 1
 
             # The topmost block, regardless of type, is set to maximum
             # lighting, as are all the blocks above it.
@@ -181,18 +181,18 @@ class Chunk(object):
             # Dim the light going throught the remaining blocks, until there
             # is no more light left.
             for y in range(height, -1, -1):
-                dim = blocks[self.blocks[x, z, y]].dim
+                dim = blocks[self.blocks[(x * 16 + z) * 16 + y]].dim
                 light -= dim
                 if light <= 0:
                     break
 
-                lightmap[x, z, y] = light
+                lightmap[(x * 16 + z) * 16 + y] = light
 
         # Now it's time to spread the light around. This flavor uses extra
         # memory to speed things up; the basic idea is to spread *all* light,
         # one glow level at a time, rather than spread each block
         # individually.
-        max_height = amax(self.heightmap)
+        max_height = max(self.heightmap)
         lightable = vectorize(lambda block: blocks[block].dim < 15)(self.blocks)
         # Protip: This is a bitwise AND because logical ANDs on arrays can't
         # happen in Numpy.
@@ -238,12 +238,14 @@ class Chunk(object):
                         0 <= y < 128):
                         continue
 
-                    if (x, z, y) in visited:
+                    if coords in visited:
                         continue
 
-                    if lightable[x, z, y] and lightmap[x, z, y] < glow:
-                        lightmap[x, z, y] = glow - blocks[self.blocks[x, z, y]].dim
-                        visited.add((x, z, y))
+                    if (lightable[(x * 16 + z) * 16 + y]
+                        and lightmap[(x * 16 + z) * 16 + y] < glow):
+                        lightmap[(x * 16 + z) * 16 + y] = (
+                            glow - blocks[self.blocks[(x * 16 + z) * 16 + y]].dim)
+                        visited.add(coords)
             spread = visited
             visited = set()
 
@@ -341,7 +343,7 @@ class Chunk(object):
             coords = []
             types = []
             metadata = []
-            for index, value in self.damaged:
+            for index, value in enumerate(self.damaged):
                 if value:
                     # This line deserves an explanation. The top of index is
                     # correct, but needs to be repacked. x and z are 4 bits
@@ -406,8 +408,8 @@ class Chunk(object):
         x, y, z = coords
 
         try:
-            if self.blocks[x, z, y] != block:
-                self.blocks[x, z, y] = block
+            if self.blocks[(x * 16 + z) * 16 + y] != block:
+                self.blocks[(x * 16 + z) * 16 + y] = block
 
                 if not self.populated:
                     return
@@ -416,21 +418,22 @@ class Chunk(object):
                 if not block:
                     # If we replace the highest block with air, we need to go
                     # through all blocks below it to find the new top block.
-                    height = self.heightmap[x, z]
+                    height = self.heightmap[x * 16 + z]
                     if y == height:
                         for y in range(height, -1, -1):
-                            if self.blocks[x, z, y]:
+                            if self.blocks[(x * 16 + z) * 16 + y]:
                                 break
-                        self.heightmap[x, z] = y
+                        self.heightmap[x * 16 + z] = y
                 else:
-                    self.heightmap[x, z] = max(self.heightmap[x, z], y)
+                    self.heightmap[x * 16 + z] = max(self.heightmap[x * 16 + z], y)
 
                 # Add to lightmap at this coordinate.
                 if block in glowing_blocks:
                     composite_glow(self.blocklight, glowing_blocks[block],
                         x, y, z)
 
-                    self.blocklight = cast["uint8"](self.blocklight.clip(0, 15))
+                    self.blocklight = array("B", [clamp(x, 0, 15) for x in
+                                                  self.blocklight])
 
                 self.dirty = True
                 self.damage(coords)
@@ -450,7 +453,7 @@ class Chunk(object):
         x, y, z = coords
 
         try:
-            return self.metadata[x, z, y]
+            return self.metadata[(x * 16 + z) * 16 + y]
         except IndexError:
             # Coordinates were out-of-bounds; warn.
             warn("Coordinates %s are out-of-bounds in %s" % (coords, self),
@@ -468,8 +471,8 @@ class Chunk(object):
         x, y, z = coords
 
         try:
-            if self.metadata[x, z, y] != metadata:
-                self.metadata[x, z, y] = metadata
+            if self.metadata[(x * 16 + z) * 16 + y] != metadata:
+                self.metadata[(x * 16 + z) * 16 + y] = metadata
 
                 self.dirty = True
                 self.damage(coords)
@@ -494,7 +497,7 @@ class Chunk(object):
 
         x, y, z = coords
 
-        block = blocks[self.blocks[x, z, y]]
+        block = blocks[self.blocks[(x * 16 + z) * 16 + y]]
         self.set_block((x, y, z), block.replace)
         self.set_metadata((x, y, z), 0)
 
@@ -508,7 +511,7 @@ class Chunk(object):
         :returns: The height of the given column of blocks.
         """
 
-        return self.heightmap[x, z]
+        return self.heightmap[x * 16 + z]
 
     def sed(self, search, replace):
         """
@@ -538,7 +541,7 @@ class Chunk(object):
 
         :rtype: :py:class:`numpy.ndarray`
         """
-        return self.blocks[x, z]
+        return self.blocks[x * 16 + z]
 
     def set_column(self, x, z, column):
         """
@@ -549,7 +552,7 @@ class Chunk(object):
         :type column: :py:class:`numpy.ndarray`
         :param column: Column data, in the form of a NumPy array.
         """
-        self.blocks[x, z] = column
+        self.blocks[x * 16 + z] = column
 
         self.dirty = True
         for y in range(128):
