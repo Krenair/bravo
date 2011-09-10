@@ -413,42 +413,45 @@ class Chunk(object):
         """
 
         x, y, z = coords
-        offset = (x * 16 + z) * 128 + y
 
-        try:
-            if self.blocks[offset] != block:
-                self.blocks[offset] = block
+        # Coordinates were out-of-bounds; warn and run away.
+        if not (0 <= x < 16 or 0 <= z < 16 or 0 <= y < 128):
+            warn("Coordinates %s are out-of-bounds in %s, ignoring call"
+                 % (coords, self), ChunkWarning)
+            return
 
-                if not self.populated:
-                    return
+        column = x * 16 + z
+        offset = column * 128 + y
 
-                # Regenerate heightmap at this coordinate.
-                if not block:
-                    # If we replace the highest block with air, we need to go
-                    # through all blocks below it to find the new top block.
-                    height = self.heightmap[x * 16 + z]
-                    if y == height:
-                        for y in range(height, -1, -1):
-                            if self.blocks[(x * 16 + z) * 128 + y]:
-                                break
-                        self.heightmap[x * 16 + z] = y
-                else:
-                    self.heightmap[x * 16 + z] = max(self.heightmap[x * 16 + z], y)
+        if self.blocks[offset] != block:
+            self.blocks[offset] = block
 
-                # Add to lightmap at this coordinate.
-                if block in glowing_blocks:
-                    composite_glow(self.blocklight, glowing_blocks[block],
-                        x, y, z)
+            if not self.populated:
+                return
 
-                    self.blocklight = array("B", [clamp(x, 0, 15) for x in
-                                                  self.blocklight])
+            # Regenerate heightmap at this coordinate.
+            if block:
+                self.heightmap[column] = max(self.heightmap[column], y)
+            else:
+                # If we replace the highest block with air, we need to go
+                # through all blocks below it to find the new top block.
+                height = self.heightmap[column]
+                if y == height:
+                    for y in range(height, -1, -1):
+                        if self.blocks[column * 128 + y]:
+                            break
+                    self.heightmap[column] = y
 
-                self.dirty = True
-                self.damage(coords)
-        except IndexError:
-            # Coordinates were out-of-bounds; warn and run away.
-            warn("Coordinates %s are out-of-bounds in %s" % (coords, self),
-                 ChunkWarning)
+            # Add to lightmap at this coordinate.
+            if block in glowing_blocks:
+                composite_glow(self.blocklight, glowing_blocks[block],
+                    x, y, z)
+
+                self.blocklight = array("B", [clamp(x, 0, 15) for x in
+                                              self.blocklight])
+
+            self.dirty = True
+            self.damage(coords)
 
     def get_metadata(self, coords):
         """
