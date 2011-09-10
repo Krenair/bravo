@@ -152,15 +152,16 @@ class TestLightmaps(unittest.TestCase):
             self.c.set_block((x, 0, z), 1)
         # Put a false floor up to block the light.
         for x, z in product(xrange(1, 15), repeat=2):
-            self.c.set_block((x, 3, z), 1)
+            self.c.set_block((x, 2, z), 1)
         self.c.regenerate()
 
         # Test that a gradient emerges.
         for x, z in product(xrange(16), repeat=2):
-            flipx = x if x > 8 else 15 - x
-            flipz = z if z > 8 else 15 - z
+            flipx = x if x > 7 else 15 - x
+            flipz = z if z > 7 else 15 - z
             target = max(flipx, flipz)
-            self.assertEqual(target, self.c.skylight[(x * 16 + z) * 128 + 1])
+            self.assertEqual(self.c.skylight[(x * 16 + z) * 128 + 1], target,
+                            "%d, %d" % (x, z))
 
     def test_skylight_arch(self):
         """
