@@ -327,16 +327,18 @@ class Chunk(object):
             # Use a single block update packet. Find the first (only) set bit
             # in the damaged array, and use it as an index.
             index = next(i for i, value in enumerate(self.damaged) if value)
+            block = self.blocks[index]
+            metadata = self.metadata[index]
             # divmod() trick for coords.
-            index, y = divmod(index, 128)
+            index, y = divmod(index, 16)
             x, z = divmod(index, 16)
 
             return make_packet("block",
                     x=x + self.x * 16,
                     y=y,
                     z=z + self.z * 16,
-                    type=self.blocks[index],
-                    meta=self.metadata[index])
+                    type=block,
+                    meta=metadata)
         else:
             # Use a batch update.
             # Coordinates are not quite packed in the same system as the
