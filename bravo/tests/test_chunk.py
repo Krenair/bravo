@@ -1,6 +1,6 @@
 from twisted.trial import unittest
-from bravo.tests.helpers import assert_array_equal
-from array import array
+
+from itertools import product
 import warnings
 
 import bravo.chunk
@@ -135,8 +135,8 @@ class TestLightmaps(unittest.TestCase):
 
     def test_boring_skylight_values(self):
         # Fill it as if we were the boring generator.
-        for i in xrange(0, 32768, 128):
-            self.c.blocks[i] = 1
+        for x, z in product(xrange(16), repeat=2):
+            self.c.set_block((x, 1, z), 1)
         self.c.regenerate()
 
         # Make sure that all of the blocks at the bottom of the ambient
@@ -144,27 +144,23 @@ class TestLightmaps(unittest.TestCase):
         # Note that skylight of a solid block is 0, the important value
         # is the skylight of the transluscent (usually air) block above it.
         for i in xrange(1, 32768, 128):
-            assert_array_equal(self.c.skylight[i], 0xf)
+            self.assertEqual(self.c.skylight[i], 0xf)
 
     def test_skylight_spread(self):
         # Fill it as if we were the boring generator.
-        self.c.blocks[:, :, 0].fill(1)
+        for i in xrange(0, 32768, 128):
+            self.c.blocks[i] = 1
         # Put a false floor up to block the light.
-        self.c.blocks[1:15, 1:15, 3].fill(1)
+        for x, z in product(xrange(1, 15), repeat=2):
+            self.c.blocks[(x * 16 + z) * 16 + 3] = 1
         self.c.regenerate()
 
-        # Put a gradient on the reference lightmap.
-        reference = array("B", [0xf] * (16 * 16))
-        top = 1
-        bottom = 15
-        glow = 14
-        while top < bottom:
-            reference[top:bottom, top:bottom] = glow
-            top += 1
-            bottom -= 1
-            glow -= 1
-
-        assert_array_equal(self.c.skylight[:, :, 1], reference)
+        # Test that a gradient emerges.
+        for x, z in product(xrange(16), repeat=2):
+            flipx = x if x > 8 else 15 - x
+            flipz = z if z > 8 else 15 - z
+            target = max(flipx, flipz)
+            self.assertEqual(target, self.c.skylight[(x * 16 + z) * 16 + 1])
 
     def test_skylight_arch(self):
         """
