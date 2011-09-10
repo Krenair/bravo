@@ -133,18 +133,19 @@ class Chunk(object):
         xz-column.
         """
 
-        for x, z in product(xrange(16), repeat=2):
-            for y in range(127, -1, -1):
-                if self.blocks[(x * 16 + z) * 16 + y]:
+        for column in xrange(16 * 16):
+            offset = column * 16
+            for i in xrange(127, -1, -1):
+                if self.blocks[offset + i]:
                     break
 
-            self.heightmap[x * 16 + z] = y
+            self.heightmap[column] = i
 
     def regenerate_blocklight(self):
         lightmap = array("L", [0] * (16 * 16 * 128))
 
         for x, y, z in product(xrange(16), xrange(128), xrange(16)):
-            block = self.blocks[(x * 16 + z) * 16 + y]
+            block = self.blocks[(x * 16 + z) * 128 + y]
             if block in glowing_blocks:
                 composite_glow(lightmap, glowing_blocks[block], x, y, z)
 
@@ -184,12 +185,12 @@ class Chunk(object):
             # Dim the light going throught the remaining blocks, until there
             # is no more light left.
             for y in range(height, -1, -1):
-                dim = blocks[self.blocks[offset * 16 + y]].dim
+                dim = blocks[self.blocks[offset * 128 + y]].dim
                 light -= dim
                 if light <= 0:
                     break
 
-                lightmap[offset * 16 + y] = light
+                lightmap[offset * 128 + y] = light
 
         # Now it's time to spread the light around. This flavor uses extra
         # memory to speed things up; the basic idea is to spread *all* light,
@@ -198,27 +199,27 @@ class Chunk(object):
         max_height = max(self.heightmap)
 
         lightable = [blocks[block].dim < 15 for block in self.blocks]
-        unlit = [lightable[i] and not lightmap[i] for i in xrange(32768)]
+        unlit = [x and not y for (x, y) in zip(lightable, lightmap)]
 
         # Create a mask to find all blocks that have an unlit block as a
         # neighbour in the xz-plane, then apply the mask to the lightmap to
         # find all lighted blocks with one or more unlit blocks as neighbours.
         spread = set()
         for x, z, y in product(xrange(16), xrange(16), xrange(max_height)):
-            if not lightmap[(x * 16 + z) * 16 + y]:
+            if not lightmap[(x * 16 + z) * 128 + y]:
                 continue
 
-            if ((x      and unlit[((x - 1) * 16 + z) * 16 + y]) or
-                (x < 15 and unlit[((x + 1) * 16 + z) * 16 + y]) or
-                (z      and unlit[(x * 16 + (z - 1)) * 16 + y]) or
-                (z < 15 and unlit[(x * 16 + (z + 1)) * 16 + y])):
+            if ((x > 0  and unlit[((x - 1) * 16 + z) * 128 + y]) or
+                (x < 15 and unlit[((x + 1) * 16 + z) * 128 + y]) or
+                (z > 0  and unlit[(x * 16 + (z - 1)) * 128 + y]) or
+                (z < 15 and unlit[(x * 16 + (z + 1)) * 128 + y])):
                 spread.add((x, z, y))
 
         visited = set()
 
         # Run the actual glow loop. For each glow level, go over unvisited air
         # blocks and illuminate them.
-        for glow in range(14, 0, -1):
+        for glow in xrange(14, 0, -1):
             for coords in spread:
                 if lightmap[(coords[0] * 16 + coords[1]) * 16 + coords[2]] <= glow:
                     visited.add(coords)
@@ -236,19 +237,19 @@ class Chunk(object):
                     z += dz
                     y += dy
 
-                    if not (0 <= x < 16 and
-                        0 <= z < 16 and
-                        0 <= y < 128):
+                    if not (0 <= x < 16 and 0 <= z < 16 and 0 <= y < 128):
                         continue
 
-                    if (x, z, y) in visited:
+                    coords = x, z, y
+                    offset = (x * 16 + z) * 128 + y
+
+                    if coords in visited:
                         continue
 
-                    if (lightable[(x * 16 + z) * 16 + y]
-                        and lightmap[(x * 16 + z) * 16 + y] < glow):
-                        lightmap[(x * 16 + z) * 16 + y] = (
-                            glow - blocks[self.blocks[(x * 16 + z) * 16 + y]].dim)
-                        visited.add((x, z, y))
+                    if lightable[offset] and lightmap[offset] < glow:
+                        lightmap[offset] = (glow -
+                                            blocks[self.blocks[offset]].dim)
+                        visited.add(coords)
 
             spread = visited
             visited = set()
@@ -277,7 +278,7 @@ class Chunk(object):
 
         x, y, z = coords
 
-        self.damaged[(x * 16 + z) * 16 + y] = 1
+        self.damaged[(x * 16 + z) * 128 + y] = 1
 
         if sum(self.damaged) > 176:
             self.all_damaged = True
@@ -396,7 +397,7 @@ class Chunk(object):
 
         try:
             x, y, z = coords
-            return self.blocks[(x * 16 + z) * 16 + y]
+            return self.blocks[(x * 16 + z) * 128 + y]
         except IndexError:
             # Coordinates were out-of-bounds; warn and pretend it's air.
             warn("Coordinates %s are out-of-bounds in %s" % (coords, self),
@@ -412,7 +413,7 @@ class Chunk(object):
         """
 
         x, y, z = coords
-        offset = (x * 16 + z) * 16 + y
+        offset = (x * 16 + z) * 128 + y
 
         try:
             if self.blocks[offset] != block:
@@ -428,7 +429,7 @@ class Chunk(object):
                     height = self.heightmap[x * 16 + z]
                     if y == height:
                         for y in range(height, -1, -1):
-                            if self.blocks[(x * 16 + z) * 16 + y]:
+                            if self.blocks[(x * 16 + z) * 128 + y]:
                                 break
                         self.heightmap[x * 16 + z] = y
                 else:
@@ -460,7 +461,7 @@ class Chunk(object):
         x, y, z = coords
 
         try:
-            return self.metadata[(x * 16 + z) * 16 + y]
+            return self.metadata[(x * 16 + z) * 128 + y]
         except IndexError:
             # Coordinates were out-of-bounds; warn.
             warn("Coordinates %s are out-of-bounds in %s" % (coords, self),
@@ -478,8 +479,8 @@ class Chunk(object):
         x, y, z = coords
 
         try:
-            if self.metadata[(x * 16 + z) * 16 + y] != metadata:
-                self.metadata[(x * 16 + z) * 16 + y] = metadata
+            if self.metadata[(x * 16 + z) * 128 + y] != metadata:
+                self.metadata[(x * 16 + z) * 128 + y] = metadata
 
                 self.dirty = True
                 self.damage(coords)
@@ -504,7 +505,7 @@ class Chunk(object):
 
         x, y, z = coords
 
-        block = blocks[self.blocks[(x * 16 + z) * 16 + y]]
+        block = blocks[self.blocks[(x * 16 + z) * 128 + y]]
         self.set_block((x, y, z), block.replace)
         self.set_metadata((x, y, z), 0)
 

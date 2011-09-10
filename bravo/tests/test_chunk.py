@@ -26,9 +26,9 @@ class TestChunkBlocks(unittest.TestCase):
         self.c.set_block((1, 0, 0), 1)
         self.c.set_block((0, 1, 0), 2)
         self.c.set_block((0, 0, 1), 3)
-        self.assertEqual(self.c.blocks[256], 1)
+        self.assertEqual(self.c.blocks[2048], 1)
         self.assertEqual(self.c.blocks[1], 2)
-        self.assertEqual(self.c.blocks[16], 3)
+        self.assertEqual(self.c.blocks[128], 3)
 
     def test_destroy(self):
         """
@@ -136,7 +136,7 @@ class TestLightmaps(unittest.TestCase):
     def test_boring_skylight_values(self):
         # Fill it as if we were the boring generator.
         for x, z in product(xrange(16), repeat=2):
-            self.c.set_block((x, 1, z), 1)
+            self.c.set_block((x, 0, z), 1)
         self.c.regenerate()
 
         # Make sure that all of the blocks at the bottom of the ambient
@@ -148,11 +148,11 @@ class TestLightmaps(unittest.TestCase):
 
     def test_skylight_spread(self):
         # Fill it as if we were the boring generator.
-        for i in xrange(0, 32768, 128):
-            self.c.blocks[i] = 1
+        for x, z in product(xrange(16), repeat=2):
+            self.c.set_block((x, 0, z), 1)
         # Put a false floor up to block the light.
         for x, z in product(xrange(1, 15), repeat=2):
-            self.c.blocks[(x * 16 + z) * 16 + 3] = 1
+            self.c.set_block((x, 3, z), 1)
         self.c.regenerate()
 
         # Test that a gradient emerges.
@@ -160,7 +160,7 @@ class TestLightmaps(unittest.TestCase):
             flipx = x if x > 8 else 15 - x
             flipz = z if z > 8 else 15 - z
             target = max(flipx, flipz)
-            self.assertEqual(target, self.c.skylight[(x * 16 + z) * 16 + 1])
+            self.assertEqual(target, self.c.skylight[(x * 16 + z) * 128 + 1])
 
     def test_skylight_arch(self):
         """
@@ -181,7 +181,7 @@ class TestLightmaps(unittest.TestCase):
         # bit of illumination.
         self.c.regenerate()
 
-        self.assertEqual(self.c.skylight[(1 * 16 + 1) * 16 + 1], 14)
+        self.assertEqual(self.c.skylight[(1 * 16 + 1) * 128 + 1], 14)
 
     def test_skylight_arch_leaves(self):
         """
@@ -205,7 +205,7 @@ class TestLightmaps(unittest.TestCase):
         # bit of illumination.
         self.c.regenerate()
 
-        self.assertEqual(self.c.skylight[(1 * 16 + 1) * 16 + 1], 13)
+        self.assertEqual(self.c.skylight[(1 * 16 + 1) * 128 + 1], 13)
 
     def test_skylight_arch_leaves_occluded(self):
         """
@@ -231,4 +231,4 @@ class TestLightmaps(unittest.TestCase):
         # bit of illumination.
         self.c.regenerate()
 
-        self.assertEqual(self.c.skylight[(1 * 16 + 1) * 16 + 1], 12)
+        self.assertEqual(self.c.skylight[(1 * 16 + 1) * 128 + 1], 12)
