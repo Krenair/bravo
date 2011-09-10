@@ -166,58 +166,61 @@ class Chunk(object):
         lightmap = array("L", [0] * (16 * 16 * 128))
 
         for x, z in product(xrange(16), repeat=2):
+            offset = x * 16 + z
+
             # The maximum lighting value, unsurprisingly, is 0xf, which is the
             # biggest possible value for a nibble.
             light = 0xf
 
             # Apparently, skylights start at the block *above* the block on
             # which the light is incident?
-            height = self.heightmap[x * 16 + z] + 1
+            height = self.heightmap[offset] + 1
 
             # The topmost block, regardless of type, is set to maximum
             # lighting, as are all the blocks above it.
-            lightmap[x, z, height:] = light
+            for i in xrange(height, 128):
+                lightmap[offset + i] = light
 
             # Dim the light going throught the remaining blocks, until there
             # is no more light left.
             for y in range(height, -1, -1):
-                dim = blocks[self.blocks[(x * 16 + z) * 16 + y]].dim
+                dim = blocks[self.blocks[offset * 16 + y]].dim
                 light -= dim
                 if light <= 0:
                     break
 
-                lightmap[(x * 16 + z) * 16 + y] = light
+                lightmap[offset * 16 + y] = light
 
         # Now it's time to spread the light around. This flavor uses extra
         # memory to speed things up; the basic idea is to spread *all* light,
         # one glow level at a time, rather than spread each block
         # individually.
         max_height = max(self.heightmap)
-        lightable = vectorize(lambda block: blocks[block].dim < 15)(self.blocks)
-        # Protip: This is a bitwise AND because logical ANDs on arrays can't
-        # happen in Numpy.
-        unlighted = logical_not(lightmap) & lightable
 
-        # Create a mask to find all blocks that have an unlighted block
-        # as a neighbour in the xz-plane.
-        mask = zeros((16, 16, max_height), dtype="bool")
-        mask[:-1,:,:max_height] |= unlighted[1:, :, :max_height]
-        mask[:,:-1,:max_height] |= unlighted[:, 1:, :max_height]
-        mask[1:,:,:max_height] |= unlighted[:-1, :, :max_height]
-        mask[:,1:,:max_height] |= unlighted[:, :-1, :max_height]
+        lightable = [blocks[block].dim < 15 for block in self.blocks]
+        unlit = [lightable[i] and not lightmap[i] for i in xrange(32768)]
 
-        # Apply the mask to the lightmap to find all lighted blocks with one
-        # or more unlighted blocks as neighbours.
-        edges = logical_and(mask, lightmap[:, :, :max_height]).nonzero()
+        # Create a mask to find all blocks that have an unlit block as a
+        # neighbour in the xz-plane, then apply the mask to the lightmap to
+        # find all lighted blocks with one or more unlit blocks as neighbours.
+        spread = set()
+        for x, z, y in product(xrange(16), xrange(16), xrange(max_height)):
+            if not lightmap[(x * 16 + z) * 16 + y]:
+                continue
 
-        spread = [tuple(coords) for coords in transpose(edges)]
+            if ((x      and unlit[((x - 1) * 16 + z) * 16 + y]) or
+                (x < 15 and unlit[((x + 1) * 16 + z) * 16 + y]) or
+                (z      and unlit[(x * 16 + (z - 1)) * 16 + y]) or
+                (z < 15 and unlit[(x * 16 + (z + 1)) * 16 + y])):
+                spread.add((x, z, y))
+
         visited = set()
 
         # Run the actual glow loop. For each glow level, go over unvisited air
         # blocks and illuminate them.
         for glow in range(14, 0, -1):
             for coords in spread:
-                if lightmap[coords] <= glow:
+                if lightmap[(coords[0] * 16 + coords[1]) * 16 + coords[2]] <= glow:
                     visited.add(coords)
                     continue
 
@@ -238,18 +241,19 @@ class Chunk(object):
                         0 <= y < 128):
                         continue
 
-                    if coords in visited:
+                    if (x, z, y) in visited:
                         continue
 
                     if (lightable[(x * 16 + z) * 16 + y]
                         and lightmap[(x * 16 + z) * 16 + y] < glow):
                         lightmap[(x * 16 + z) * 16 + y] = (
                             glow - blocks[self.blocks[(x * 16 + z) * 16 + y]].dim)
-                        visited.add(coords)
+                        visited.add((x, z, y))
+
             spread = visited
             visited = set()
 
-        self.skylight = lightmap.clip(0, 15)
+        self.skylight = array("B", [clamp(i, 0, 15) for i in lightmap])
 
     def regenerate(self):
         """

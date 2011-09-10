@@ -135,16 +135,16 @@ class TestLightmaps(unittest.TestCase):
 
     def test_boring_skylight_values(self):
         # Fill it as if we were the boring generator.
-        self.c.blocks[:, :, 0].fill(1)
+        for i in xrange(0, 32768, 128):
+            self.c.blocks[i] = 1
         self.c.regenerate()
 
         # Make sure that all of the blocks at the bottom of the ambient
         # lightmap are set to 15 (fully illuminated).
         # Note that skylight of a solid block is 0, the important value
         # is the skylight of the transluscent (usually air) block above it.
-        reference = array("B", [0xf] * (16 * 16))
-
-        assert_array_equal(self.c.skylight[:, :, 1], reference)
+        for i in xrange(1, 32768, 128):
+            assert_array_equal(self.c.skylight[i], 0xf)
 
     def test_skylight_spread(self):
         # Fill it as if we were the boring generator.
