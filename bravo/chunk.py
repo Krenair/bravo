@@ -164,7 +164,7 @@ class Chunk(object):
         The height map must be valid for this method to produce valid results.
         """
 
-        lightmap = array("L", [0] * (16 * 16 * 128))
+        lightmap = array("B", [0] * (16 * 16 * 128))
 
         for x, z in product(xrange(16), repeat=2):
             offset = x * 16 + z
@@ -247,14 +247,14 @@ class Chunk(object):
                         continue
 
                     if lightable[offset] and lightmap[offset] < glow:
-                        lightmap[offset] = (glow -
-                                            blocks[self.blocks[offset]].dim)
+                        new = glow - blocks[self.blocks[offset]].dim
+                        lightmap[offset] = clamp(new, 0, 15)
                         visited.add(coords)
 
             spread = visited
             visited = set()
 
-        self.skylight = array("B", [clamp(i, 0, 15) for i in lightmap])
+        self.skylight = lightmap
 
     def regenerate(self):
         """
