@@ -331,7 +331,7 @@ class Chunk(object):
             block = self.blocks[index]
             metadata = self.metadata[index]
             # divmod() trick for coords.
-            index, y = divmod(index, 16)
+            index, y = divmod(index, 128)
             x, z = divmod(index, 16)
 
             return make_packet("block",
