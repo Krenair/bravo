@@ -410,10 +410,11 @@ class Chunk(object):
         """
 
         x, y, z = coords
+        offset = (x * 16 + z) * 16 + y
 
         try:
-            if self.blocks[(x * 16 + z) * 16 + y] != block:
-                self.blocks[(x * 16 + z) * 16 + y] = block
+            if self.blocks[offset] != block:
+                self.blocks[offset] = block
 
                 if not self.populated:
                     return

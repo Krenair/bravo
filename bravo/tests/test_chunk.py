@@ -27,8 +27,8 @@ class TestChunkBlocks(unittest.TestCase):
         self.c.set_block((0, 1, 0), 2)
         self.c.set_block((0, 0, 1), 3)
         self.assertEqual(self.c.blocks[256], 1)
-        self.assertEqual(self.c.blocks[1], 3)
-        self.assertEqual(self.c.blocks[16], 2)
+        self.assertEqual(self.c.blocks[1], 2)
+        self.assertEqual(self.c.blocks[16], 3)
 
     def test_destroy(self):
         """
