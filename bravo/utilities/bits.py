@@ -45,5 +45,6 @@ def pack_nibbles(a):
     :returns: packed nibbles as a string of bytes
     """
 
-    packed = array("B", ((y << 4) | x for x, y in grouper(2, a)))
+    packed = array("B",
+                   (((y & 0xf) << 4) | (x & 0xf) for x, y in grouper(2, a)))
     return packed.tostring()
